@@ -1,0 +1,64 @@
+name: ci
+
+on:
+  pull_request:            # every PR: build and check
+  push:
+    branches: [main]       # every merge to main: build, version and push
+
+permissions:
+  contents: read
+  packages: write          # lets the built-in token push to GHCR
+
+jobs:
+  # Job 1: list every folder under services/ that has a Dockerfile
+  find-services:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.list.outputs.services }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          services=$(find services -mindepth 2 -maxdepth 2 -name Dockerfile -printf '%h\n' | xargs -n1 basename | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "services=$services" >> "$GITHUB_OUTPUT"
+          echo "Found: $services"
+
+  # Job 2: build each service in parallel (one matrix entry per service)
+  build:
+    needs: find-services
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.find-services.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out image name and version
+        id: meta
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"   # GHCR needs lower case
+          echo "image=ghcr.io/${owner}/${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "version=0.1.${GITHUB_RUN_NUMBER}-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build (push only on main)
+        uses: docker/build-push-action@v6
+        with:
+          context: services/${{ matrix.service }}
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+          build-args: VERSION=${{ steps.meta.outputs.version }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+
+      - name: Write the version to the run summary
+        run: echo "### ${{ matrix.service }} -> ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}" >> "$GITHUB_STEP_SUMMARY"
