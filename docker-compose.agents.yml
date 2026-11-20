@@ -1,0 +1,22 @@
+# Run the Python agent + AI skeletons:  docker compose -f docker-compose.agents.yml up -d --build
+# vLLM runs on the Mac itself (vllm-metal):  vllm serve mlx-community/Qwen2.5-0.5B-Instruct-4bit --host 0.0.0.0 --port 8010 --api-key local
+services:
+  allocation-coordinator:
+    build: services/allocation-coordinator
+    ports: ["8101:8080"]
+  patient-transfer-agent:
+    build: services/patient-transfer-agent
+    ports: ["8102:8080"]
+  emergency-coordination-agent:
+    build: services/emergency-coordination-agent
+    ports: ["8103:8080"]
+  ambulance-coordination-agent:
+    build: services/ambulance-coordination-agent
+    ports: ["8104:8080"]
+  rag-service:
+    build: services/rag-service
+    ports: ["8105:8080"]
+  explanation-service:
+    build: services/explanation-service
+    ports: ["8106:8080"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
