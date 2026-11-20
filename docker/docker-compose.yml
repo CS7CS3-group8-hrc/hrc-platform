@@ -1,0 +1,102 @@
+networks:
+  hrc-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  timescale_data:
+  kafka1_data:
+  kafka2_data:
+  kafka3_data:
+
+services:
+  hospital-node:
+    build:
+      context: ../services
+      dockerfile: ./hospitalnode/docker/Dockerfile
+    container_name: hospital-node
+    restart: "no"
+    networks:
+      - hrc-network
+    ports:
+      - "9000:9000"
+      #    environment:
+      #      - SPRING_PROFILES_ACTIVE=dev
+      #      - JAVA_OPTS=-Xms512m -Xmx1200m -XX:+UseG1GC
+
+      #    deploy:
+      # resources:
+      #   limits:
+      #     cpus: '2.0'
+      #     memory: 2000M
+      #   reservations:
+      #     cpus: '1.0'
+      #     memory: 1000M
+    depends_on:
+      pgsql-server:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+  #      kafka-1:
+  #        condition: service_healthy
+  #      kafka-2:
+  #        condition: service_healthy
+  #      kafka-3:
+  #        condition: service_healthy
+  #    healthcheck:
+  #      test: ["CMD-SHELL", "curl -sf http://hospital-node:9000/actuator/health || exit 1"]
+  #      interval: 15s
+  #      timeout: 5s
+  #      retries: 5
+  #      start_period: 60s
+
+
+  # PRIMARY SOURCE DB: MSSQL SERVER WITH CDC ENABLED
+
+  pgsql-server:
+    # 2022-CU26-ubuntu-22.04
+    image: postgres:16@sha256:3950ad7c3148ca2175ef1b6c36c9efbf78957ae8fbe8b3a5d7c35af50500382f
+    container_name: pgsql-server
+    restart: unless-stopped
+    networks:
+      - hrc-network
+    ports:
+      - "5430:5430"
+    environment:
+      - POSTGRES_DB=hospitalDB
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Admin@123
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    #      - ../sermon-app/docker/docker-init/01-init-mssql.sql:/docker-init/01-init-mssql.sql
+    #      - ../sermon-app/docker/docker-start/01-start-mssql.sh:/docker-start/01-start-mssql.sh:ro
+    #    entrypoint: ["/bin/bash", "./docker-start/01-start-mssql.sh"]
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hospitalDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # SECONDARY TARGET DB: TimescaleDB (Time-Series & Analytics Sink)
+  timescaledb:
+    image: timescale/timescaledb@sha256:61f891691050da6032023c01ea885730eeeba06b7c17b403e7d0b9c49c37dfe9
+    container_name: timescaledb
+    restart: unless-stopped
+    networks:
+      - hrc-network
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=hospitalNodeTimescaleDB
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=Admin@123
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    #      - ../sermon-app/docker/docker-init/02-init-timescale.sql:/docker-entrypoint-initdb.d/02-init-timescale.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hospitalNodeTimescaleDB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
