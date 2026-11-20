@@ -152,6 +152,9 @@
 			<plugin>
 				<groupId>io.github.ascopes</groupId>
 				<artifactId>protobuf-maven-plugin</artifactId>
+				<configuration>
+					<failOnMissingSources>false</failOnMissingSources>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
