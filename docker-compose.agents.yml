@@ -83,6 +83,9 @@ services:
     build: services/explanation-service
     ports: ["8106:8080"]
     extra_hosts: ["host.docker.internal:host-gateway"]
+  forecasting-service:
+    build: services/forecasting-service
+    ports: ["8107:8080"]
 
 volumes:
   kafka-data:

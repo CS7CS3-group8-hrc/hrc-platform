@@ -17,6 +17,7 @@ service folder on its own). The RAG and LLM calls stay plain HTTP.
 | ambulance-coordination-agent | 8104 | Publishes hello to Kafka, consumes the reply |
 | rag-service | 8105 | Returns a placeholder policy passage |
 | explanation-service | 8106 | Sends one prompt to vLLM (the LLM) and returns the answer |
+| forecasting-service | 8107 | Very simple model: base rate per hospital x scenario multipliers (snow, concert, flu season...). `POST /forecast` with `{"hospital": "mater", "hours": 4, "scenarios": ["snow"]}` |
 
 Each agent follows a perceive -> decide -> act structure; real rules go in `decide()` later.
 
@@ -34,7 +35,7 @@ http://localhost:8090. From your Mac, the broker is `localhost:9094`; inside Doc
 
 ### Run it
 
-Needs only Docker. Ports 8101-8106, 8090 and 9094 must be free.
+Needs only Docker. Ports 8101-8107, 8090 and 9094 must be free.
 
 ```bash
 docker compose -f docker-compose.agents.yml up -d --build
