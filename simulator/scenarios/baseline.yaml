@@ -1,0 +1,43 @@
+name: baseline
+seed: 42
+startTime: "2026-11-20T08:00:00Z"
+region: dublin
+defaults:
+  ambulanceSpeedKmh: 60
+hospitals:
+  - id: H1
+    name: "Hospital North"
+    lat: 53.3900
+    lon: -6.2230
+    wards:
+      - {id: H1-ED,  department: ED,      beds: 20, initialOccupancy: 0.7}
+      - {id: H1-ICU, department: ICU,     beds: 10, initialOccupancy: 0.8}
+      - {id: H1-GEN, department: GENERAL, beds: 60, initialOccupancy: 0.85}
+  - id: H2
+    name: "Riverside General Hospital"
+    lat: 53.3440
+    lon: -6.3000
+    wards:
+      - {id: H2-ED,  department: ED,               beds: 16, initialOccupancy: 0.75}
+      - {id: H2-ICU, department: ICU,              beds: 8,  initialOccupancy: 0.75}
+      - {id: H2-GEN, department: GENERAL,          beds: 50, initialOccupancy: 0.8}
+      - {id: H2-TR,  department: THEATRE_RECOVERY, beds: 6,  initialOccupancy: 0.5}
+  - id: H3
+    name: "Southbay University Hospital"
+    lat: 53.3000
+    lon: -6.2150
+    wards:
+      - {id: H3-ED,  department: ED,      beds: 24, initialOccupancy: 0.65}
+      - {id: H3-ICU, department: ICU,     beds: 12, initialOccupancy: 0.85}
+      - {id: H3-GEN, department: GENERAL, beds: 70, initialOccupancy: 0.8}
+background:
+  admissionsPerHour: {ED: 6, ICU: 0.5, GENERAL: 3}
+  meanLengthOfStayHours: {ED: 4, ICU: 72, GENERAL: 96, THEATRE_RECOVERY: 6}
+ambulances:
+  - {id: A1, baseLat: 53.3498, baseLon: -6.2603}
+  - {id: A2, baseLat: 53.3720, baseLon: -6.3050}
+  - {id: A3, baseLat: 53.3200, baseLon: -6.2500}
+  - {id: A4, baseLat: 53.3600, baseLon: -6.1950}
+injections:
+  - {at: "+00:02:00", type: emergency_call, params: {lat: 53.3550, lon: -6.2700, patientCategory: CARDIAC}}
+  - {at: "+00:07:00", type: emergency_call, params: {lat: 53.3150, lon: -6.2300, patientCategory: TRAUMA}}
