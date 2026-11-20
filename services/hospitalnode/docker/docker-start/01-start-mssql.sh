@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -e
 
-# Define hardcoded password in one place to avoid mismatch bugs
-SA_PASSWORD="Admin@123"
+# Credentials come from the environment (.env via docker compose), never from this file
+SA_PASSWORD="${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD is not set - copy .env.example to .env}"
+SERMON_DB_USER="${SERMON_DB_USER:-sermon_admin}"
+SERMON_DB_PASSWORD="${SERMON_DB_PASSWORD:?SERMON_DB_PASSWORD is not set - copy .env.example to .env}"
 
 # Clear healthcheck flag from previous runs
 rm -f /tmp/mssql-initialized
@@ -43,6 +45,7 @@ echo "SQL Server is ready. Running initialization script..."
         -U sa \
         -P "$SA_PASSWORD" \
         -C \
+        -v SERMON_DB_USER="$SERMON_DB_USER" SERMON_DB_PASSWORD="$SERMON_DB_PASSWORD" \
         -i /docker-init/01-init-mssql.sql
 
 # Mark as initialized for healthcheck

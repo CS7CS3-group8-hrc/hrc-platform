@@ -6,8 +6,8 @@
 
     "database.hostname": "mssqlserver",
     "database.port": 1435,
-    "database.user": "sermon_admin",
-    "database.password": "Admin@123",
+    "database.user": "${SERMON_DB_USER}",
+    "database.password": "${SERMON_DB_PASSWORD}",
 
     "database.names": "serMonDB",
 
