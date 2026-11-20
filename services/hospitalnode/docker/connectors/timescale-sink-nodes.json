@@ -6,8 +6,8 @@
     "topics": "sermon-cdc.serMonDB.dbo.nodes",
 
     "connection.url": "jdbc:postgresql://timescaledb:5432/serMonTimescaleDB",
-    "connection.username": "postgres",
-    "connection.password": "Admin@123",
+    "connection.username": "${POSTGRES_USER}",
+    "connection.password": "${POSTGRES_PASSWORD}",
 
     "table.name.format": "nodes",
     "insert.mode": "upsert",

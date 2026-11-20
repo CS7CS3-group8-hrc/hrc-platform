@@ -3,6 +3,23 @@ set -eo pipefail
 
 DEBEZIUM_URL="http://debezium:8083/connectors"
 
+: "${SERMON_DB_USER:?SERMON_DB_USER is not set - copy .env.example to .env}"
+: "${SERMON_DB_PASSWORD:?SERMON_DB_PASSWORD is not set - copy .env.example to .env}"
+: "${POSTGRES_USER:?POSTGRES_USER is not set - copy .env.example to .env}"
+: "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is not set - copy .env.example to .env}"
+
+# Replace ${VAR} placeholders in a connector config with values from the environment.
+# The rendered config is only sent to Debezium, never written to disk or printed.
+render_config() {
+  local config
+  config=$(<"$1")
+  config=${config//'${SERMON_DB_USER}'/$SERMON_DB_USER}
+  config=${config//'${SERMON_DB_PASSWORD}'/$SERMON_DB_PASSWORD}
+  config=${config//'${POSTGRES_USER}'/$POSTGRES_USER}
+  config=${config//'${POSTGRES_PASSWORD}'/$POSTGRES_PASSWORD}
+  printf '%s' "$config"
+}
+
 echo "Checking Debezium availability..."
 
 # Wait for Kafka Connect REST API
@@ -36,7 +53,7 @@ register_connector() {
   until [ $RETRY_COUNT -ge $MAX_RETRIES ]; do
     RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "${DEBEZIUM_URL}" \
                   -H "Content-Type: application/json" \
-                  -d @"${CONFIG_FILE}")
+                  -d "$(render_config "${CONFIG_FILE}")")
 
     BODY=$(echo "${RESPONSE}" | head -n -1)
     STATUS=$(echo "${RESPONSE}" | tail -n 1)
@@ -53,7 +70,7 @@ register_connector() {
   done
 
       echo "FAILED: Could not register connector '${CONNECTOR_NAME}'."
-      echo "Last Response: ${BODY}"
+      echo "Last Response (HTTP ${STATUS}) - check connector settings; credentials are not printed."
       exit 1
     }
 
