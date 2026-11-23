@@ -10,6 +10,13 @@ permissions:
   packages: write          # lets the built-in token push to GHCR
 
 jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v1.6.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   # Job 1: list every folder under services/ that has a Dockerfile
   find-services:
     runs-on: ubuntu-latest
@@ -25,7 +32,7 @@ jobs:
 
   # Job 2: build each service in parallel (one matrix entry per service)
   build:
-    needs: find-services
+    needs: [gitleaks, find-services]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
