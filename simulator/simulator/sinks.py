@@ -10,9 +10,10 @@ The engine gets two sinks: one for `ambulance.events` and one for ADT, because A
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Protocol
 
 from pydantic import BaseModel
@@ -31,15 +32,19 @@ class Envelope:
     headers: dict[str, str]  # correlationId, eventId, timestamp (CLAUDE.md 3)
 
 
-def build_headers(event_id: str, sim_time: datetime, correlation_id: str | None = None) -> dict[str, str]:
+def build_headers(
+    event_id: str, sim_time: datetime, correlation_id: str | None = None
+) -> dict[str, str]:
     """Kafka headers for an event.
 
-    TODO:
-      - eventId = event_id
-      - timestamp = sim_time as ISO 8601 UTC with a trailing "Z" (sim time, not wall time!)
-      - correlationId = correlation_id or event_id (a new chain starts with its own id)
+    timestamp is the SIM time (not wall time) as ISO 8601 UTC with a trailing "Z", so the
+    platform's freshness rules work under speed-up. A new chain's correlationId is its own id.
     """
-    raise NotImplementedError
+    return {
+        "correlationId": correlation_id or event_id,
+        "eventId": event_id,
+        "timestamp": sim_time.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+    }
 
 
 class EventSink(Protocol):
@@ -84,9 +89,17 @@ class LogSink:
         self.stream = stream  # "ambulance" or "adt", used in the log record
 
     def publish(self, envelope: Envelope) -> None:
-        """TODO: log.info a JSON line with stream, key, headers and
-        envelope.event.model_dump(mode="json", by_alias=True)."""
-        raise NotImplementedError
+        """Log one JSON line with stream, key, headers and the event body."""
+        log.info(
+            json.dumps(
+                {
+                    "stream": self.stream,
+                    "key": envelope.key,
+                    "headers": envelope.headers,
+                    "event": envelope.event.model_dump(mode="json", by_alias=True),
+                }
+            )
+        )
 
     async def start(self) -> None:
         pass
@@ -109,9 +122,9 @@ class KafkaSink:
 
     async def start(self) -> None:
         """TODO:
-          - AIOKafkaProducer(bootstrap_servers=..., security_protocol=...,
-                             ssl_context=create_ssl_context() if SSL, acks="all")
-          - await producer.start(); spawn the _drain task
+        - AIOKafkaProducer(bootstrap_servers=..., security_protocol=...,
+                           ssl_context=create_ssl_context() if SSL, acks="all")
+        - await producer.start(); spawn the _drain task
         """
         raise NotImplementedError
 

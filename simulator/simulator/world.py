@@ -16,10 +16,14 @@ from simulator.contracts import (
     AmbulanceState,
     AmbulanceStatus,
     BedCensus,
+    BedState,
     BedStatus,
+    BedSummary,
     Department,
     HospitalState,
     VehicleStatus,
+    WardCensus,
+    WardState,
 )
 from simulator.scenario import AmbulanceSpec, HospitalSpec, Scenario
 
@@ -42,19 +46,30 @@ class Bed:
     occupied_since: datetime | None = None
 
     def occupy(self, patient_ref: str, at: datetime) -> None:
-        """FREE → OCCUPIED. TODO: raise InvalidTransition unless FREE; set patient_ref, occupied_since."""
-        raise NotImplementedError
+        """FREE → OCCUPIED."""
+        if self.status is not BedStatus.FREE:
+            raise InvalidTransition(f"bed {self.bed_id}: cannot occupy, status is {self.status}")
+        self.status = BedStatus.OCCUPIED
+        self.patient_ref = patient_ref
+        self.occupied_since = at
 
     def release(self) -> str:
-        """OCCUPIED → FREE. Returns the patient_ref that left.
-
-        TODO: raise InvalidTransition unless OCCUPIED; clear patient_ref and occupied_since.
-        """
-        raise NotImplementedError
+        """OCCUPIED → FREE. Returns the patient_ref that left."""
+        if self.status is not BedStatus.OCCUPIED or self.patient_ref is None:
+            raise InvalidTransition(f"bed {self.bed_id}: cannot release, status is {self.status}")
+        patient_ref = self.patient_ref
+        self.status = BedStatus.FREE
+        self.patient_ref = None
+        self.occupied_since = None
+        return patient_ref
 
     def mark_out_of_service(self) -> None:
-        """FREE → OUT_OF_SERVICE. TODO: raise InvalidTransition unless FREE."""
-        raise NotImplementedError
+        """FREE → OUT_OF_SERVICE."""
+        if self.status is not BedStatus.FREE:
+            raise InvalidTransition(
+                f"bed {self.bed_id}: cannot take out of service, status is {self.status}"
+            )
+        self.status = BedStatus.OUT_OF_SERVICE
 
 
 @dataclass
@@ -68,12 +83,12 @@ class Ward:
         return len(self.beds)
 
     def beds_with_status(self, status: BedStatus) -> list[Bed]:
-        """TODO: list of beds in this ward with the given status (keep list order: determinism)."""
-        raise NotImplementedError
+        """Beds in this ward with the given status, in list order (determinism)."""
+        return [bed for bed in self.beds if bed.status is status]
 
     def find_patient(self, patient_ref: str) -> Bed | None:
-        """TODO: the bed holding this patient, or None."""
-        raise NotImplementedError
+        """The bed holding this patient, or None."""
+        return next((bed for bed in self.beds if bed.patient_ref == patient_ref), None)
 
 
 @dataclass
@@ -86,27 +101,68 @@ class Hospital:
     his_feed_online: bool = True
 
     def wards_in(self, department: Department) -> list[Ward]:
-        """TODO: all wards of this department (a hospital may have more than one)."""
-        raise NotImplementedError
+        """All wards of this department (a hospital may have more than one)."""
+        return [ward for ward in self.wards if ward.department is department]
 
     def free_beds_in(self, department: Department) -> list[tuple[Ward, Bed]]:
-        """TODO: every FREE bed in that department, paired with its ward, in stable order."""
-        raise NotImplementedError
+        """Every FREE bed in that department, paired with its ward, in stable order."""
+        return [
+            (ward, bed)
+            for ward in self.wards_in(department)
+            for bed in ward.beds_with_status(BedStatus.FREE)
+        ]
 
     def find_patient(self, patient_ref: str) -> tuple[Ward, Bed] | None:
-        """TODO: locate a patient anywhere in this hospital."""
-        raise NotImplementedError
+        """Locate a patient anywhere in this hospital."""
+        for ward in self.wards:
+            bed = ward.find_patient(patient_ref)
+            if bed is not None:
+                return ward, bed
+        return None
 
     def to_census(self, as_of: datetime) -> BedCensus:
-        """Build the HIS census (CLAUDE.md 5.1). MUST NOT include patientRef.
-
-        TODO: one WardCensus per ward with total/occupied/out-of-service counts and BedSummary list.
-        """
-        raise NotImplementedError
+        """Build the HIS census (CLAUDE.md 5.1). MUST NOT include patientRef."""
+        return BedCensus(
+            hospital_id=self.hospital_id,
+            as_of=as_of,
+            wards=[
+                WardCensus(
+                    ward_id=ward.ward_id,
+                    department=ward.department,
+                    total_beds=ward.total_beds,
+                    occupied_beds=len(ward.beds_with_status(BedStatus.OCCUPIED)),
+                    out_of_service_beds=len(ward.beds_with_status(BedStatus.OUT_OF_SERVICE)),
+                    beds=[BedSummary(bed_id=b.bed_id, status=b.status) for b in ward.beds],
+                )
+                for ward in self.wards
+            ],
+        )
 
     def to_state(self) -> HospitalState:
-        """Full state for /sim/state (includes patientRef). TODO."""
-        raise NotImplementedError
+        """Full state for /sim/state (includes patientRef)."""
+        return HospitalState(
+            hospital_id=self.hospital_id,
+            name=self.name,
+            lat=self.lat,
+            lon=self.lon,
+            his_feed_online=self.his_feed_online,
+            wards=[
+                WardState(
+                    ward_id=ward.ward_id,
+                    department=ward.department,
+                    beds=[
+                        BedState(
+                            bed_id=b.bed_id,
+                            status=b.status,
+                            patient_ref=b.patient_ref,
+                            occupied_since=b.occupied_since,
+                        )
+                        for b in ward.beds
+                    ],
+                )
+                for ward in self.wards
+            ],
+        )
 
 
 # --------------------------------------------------------------------------- ambulances
@@ -165,55 +221,113 @@ class Ambulance:
         return self.status in MOVING_STATUSES
 
     def _transition(self, new_status: AmbulanceStatus) -> None:
-        """TODO: raise InvalidTransition if new_status not in ALLOWED_TRANSITIONS[self.status]."""
-        raise NotImplementedError
+        """Move to new_status, or raise InvalidTransition if the graph doesn't allow it."""
+        if new_status not in ALLOWED_TRANSITIONS[self.status]:
+            raise InvalidTransition(
+                f"ambulance {self.vehicle_id}: {self.status} -> {new_status} is not allowed"
+            )
+        self.status = new_status
+
+    def _stop(self) -> None:
+        """Clear the movement target and park (speed 0)."""
+        self.target_lat = None
+        self.target_lon = None
+        self.current_speed_kmh = 0.0
 
     def dispatch_to_scene(
         self, incident_id: str, lat: float, lon: float, patient_category: str
     ) -> None:
-        """AVAILABLE/RETURNING → EN_ROUTE_TO_SCENE. TODO: set target, incident, category."""
-        raise NotImplementedError
+        """AVAILABLE/RETURNING → EN_ROUTE_TO_SCENE."""
+        self._transition(AmbulanceStatus.EN_ROUTE_TO_SCENE)
+        self.target_lat = lat
+        self.target_lon = lon
+        self.incident_id = incident_id
+        self.patient_category = patient_category
 
     def arrive_at_scene(self) -> None:
-        """EN_ROUTE_TO_SCENE → AT_SCENE. TODO: clear target, speed 0."""
-        raise NotImplementedError
+        """EN_ROUTE_TO_SCENE → AT_SCENE."""
+        self._transition(AmbulanceStatus.AT_SCENE)
+        self._stop()
 
     def load_patient(self, patient_ref: str) -> None:
-        """AT_SCENE → AWAITING_DESTINATION. TODO: set patient_ref."""
-        raise NotImplementedError
+        """AT_SCENE → AWAITING_DESTINATION."""
+        self._transition(AmbulanceStatus.AWAITING_DESTINATION)
+        self.patient_ref = patient_ref
 
     def assign_destination(
         self, hospital: Hospital, department: Department, placement_id: str | None
     ) -> None:
-        """AWAITING_DESTINATION → TRANSPORTING (or TRANSPORTING → TRANSPORTING for REROUTE/REDIRECT).
-
-        TODO: set destination_hospital_id, destination_department, placement_id and the target
-        to the hospital's coordinates.
-        """
-        raise NotImplementedError
+        """AWAITING_DESTINATION → TRANSPORTING (or TRANSPORTING → TRANSPORTING for REROUTE/REDIRECT)."""
+        self._transition(AmbulanceStatus.TRANSPORTING)
+        self.destination_hospital_id = hospital.hospital_id
+        self.destination_department = department
+        self.placement_id = placement_id
+        self.target_lat = hospital.lat
+        self.target_lon = hospital.lon
 
     def arrive_at_hospital(self) -> None:
-        """TRANSPORTING → AT_HOSPITAL. TODO: clear target, speed 0. Keep patient_ref for the handover."""
-        raise NotImplementedError
+        """TRANSPORTING → AT_HOSPITAL. Keeps patient_ref for the handover."""
+        self._transition(AmbulanceStatus.AT_HOSPITAL)
+        self._stop()
 
     def hand_over_and_return(self) -> str:
-        """AT_HOSPITAL → RETURNING. Returns the patient_ref handed over.
-
-        TODO: clear patient/destination/placement/incident fields; target = base.
-        """
-        raise NotImplementedError
+        """AT_HOSPITAL → RETURNING. Returns the patient_ref handed over."""
+        if self.patient_ref is None:
+            raise InvalidTransition(f"ambulance {self.vehicle_id}: no patient to hand over")
+        self._transition(AmbulanceStatus.RETURNING)
+        patient_ref = self.patient_ref
+        self.patient_ref = None
+        self.patient_category = None
+        self.destination_hospital_id = None
+        self.destination_department = None
+        self.placement_id = None
+        self.incident_id = None
+        self.target_lat = self.base_lat
+        self.target_lon = self.base_lon
+        return patient_ref
 
     def arrive_at_base(self) -> None:
-        """RETURNING → AVAILABLE. TODO: clear target, speed 0."""
-        raise NotImplementedError
+        """RETURNING → AVAILABLE."""
+        self._transition(AmbulanceStatus.AVAILABLE)
+        self._stop()
 
     def to_vehicle_status(self, updated_at: datetime) -> VehicleStatus:
-        """Tracking API view (CLAUDE.md 5.2). `online` = telemetry_online. TODO."""
-        raise NotImplementedError
+        """Tracking API view (CLAUDE.md 5.2). `online` = telemetry_online."""
+        return VehicleStatus(
+            vehicle_id=self.vehicle_id,
+            lat=self.lat,
+            lon=self.lon,
+            speed_kmh=self.current_speed_kmh,
+            heading=self.heading,
+            status=self.status,
+            destination_hospital_id=self.destination_hospital_id,
+            placement_id=self.placement_id,
+            patient_category=self.patient_category,
+            online=self.telemetry_online,
+            updated_at=updated_at,
+        )
 
     def to_state(self) -> AmbulanceState:
-        """Full state for /sim/state. TODO."""
-        raise NotImplementedError
+        """Full state for /sim/state. speedKmh is the current speed, as in VehicleStatus."""
+        return AmbulanceState(
+            vehicle_id=self.vehicle_id,
+            base_lat=self.base_lat,
+            base_lon=self.base_lon,
+            lat=self.lat,
+            lon=self.lon,
+            speed_kmh=self.current_speed_kmh,
+            heading=self.heading,
+            status=self.status,
+            target_lat=self.target_lat,
+            target_lon=self.target_lon,
+            destination_hospital_id=self.destination_hospital_id,
+            destination_department=self.destination_department,
+            placement_id=self.placement_id,
+            patient_ref=self.patient_ref,
+            patient_category=self.patient_category,
+            telemetry_online=self.telemetry_online,
+            last_position_at=self.last_position_at,
+        )
 
 
 # --------------------------------------------------------------------------- incidents
@@ -249,41 +363,103 @@ class World:
     ) -> World:
         """Build the initial world from a scenario.
 
-        TODO:
-          - build each Hospital via build_hospital
-          - build each Ambulance via build_ambulance (parked at base, AVAILABLE)
-          - initial occupancy: for each ward, occupy round(beds * initialOccupancy) beds chosen
-            with rng.sample, giving each a patient_ref from next_patient_ref()
-        NOTE: the engine must also schedule discharges for these initial patients; return the
-        world and let the engine walk occupied beds afterwards (keeps World RNG-light).
+        Initial occupancy: each ward gets round(beds * initialOccupancy) OCCUPIED beds, chosen
+        with rng.sample, each with a fresh patient_ref and occupied_since = start_time.
+        Hospitals and wards are walked in scenario order, so the RNG draws are deterministic.
+
+        NOTE: the engine must also schedule discharges for these initial patients; it walks
+        the occupied beds after this returns (keeps World RNG-light).
         """
-        raise NotImplementedError
+        hospitals: dict[str, Hospital] = {}
+        for hospital_spec in scenario.hospitals:
+            hospital = build_hospital(hospital_spec)
+            for ward, ward_spec in zip(hospital.wards, hospital_spec.wards, strict=True):
+                n_occupied = round(ward_spec.beds * ward_spec.initial_occupancy)
+                chosen = rng.sample(ward.beds, n_occupied)
+                # Occupy in bed order, not sample order, so patient refs run along the ward.
+                for bed in sorted(chosen, key=ward.beds.index):
+                    bed.occupy(next_patient_ref(), start_time)
+            hospitals[hospital.hospital_id] = hospital
+
+        ambulances = {
+            spec.id: build_ambulance(spec, scenario.defaults.ambulance_speed_kmh)
+            for spec in scenario.ambulances
+        }
+        return cls(hospitals=hospitals, ambulances=ambulances)
 
     def hospital(self, hospital_id: str) -> Hospital:
-        """TODO: lookup or KeyError."""
-        raise NotImplementedError
+        """Lookup by id, or KeyError."""
+        return self.hospitals[hospital_id]
 
     def ambulance(self, vehicle_id: str) -> Ambulance:
-        """TODO: lookup or KeyError."""
-        raise NotImplementedError
+        """Lookup by id, or KeyError."""
+        return self.ambulances[vehicle_id]
 
     def check_invariants(self) -> list[str]:
         """Return a list of human-readable violations (empty list = all good). CLAUDE.md 4.3.
 
-        TODO:
+        Checks:
           - per ward: occupied ≤ total
           - per bed: patient_ref is not None  ⇔  status == OCCUPIED
           - per ambulance: patient_ref is not None ⇒ status in PATIENT_ON_BOARD_STATUSES
-          - (bonus) a patient_ref appears in at most one bed across all hospitals
+          - a patient_ref appears in at most one bed across all hospitals
         """
-        raise NotImplementedError
+        violations: list[str] = []
+        bed_of_patient: dict[str, str] = {}
+
+        for hospital in self.hospitals.values():
+            for ward in hospital.wards:
+                occupied = len(ward.beds_with_status(BedStatus.OCCUPIED))
+                if occupied > ward.total_beds:
+                    violations.append(
+                        f"ward {ward.ward_id}: {occupied} occupied > {ward.total_beds} total"
+                    )
+                for bed in ward.beds:
+                    has_patient = bed.patient_ref is not None
+                    if has_patient != (bed.status is BedStatus.OCCUPIED):
+                        violations.append(
+                            f"bed {bed.bed_id}: status {bed.status} with patient_ref {bed.patient_ref!r}"
+                        )
+                    if bed.patient_ref is not None:
+                        other = bed_of_patient.setdefault(bed.patient_ref, bed.bed_id)
+                        if other != bed.bed_id:
+                            violations.append(
+                                f"patient {bed.patient_ref} is in both {other} and {bed.bed_id}"
+                            )
+
+        for amb in self.ambulances.values():
+            if amb.patient_ref is not None and amb.status not in PATIENT_ON_BOARD_STATUSES:
+                violations.append(
+                    f"ambulance {amb.vehicle_id}: patient {amb.patient_ref} on board while {amb.status}"
+                )
+        return violations
 
 
 def build_hospital(spec: HospitalSpec) -> Hospital:
-    """TODO: one Ward per WardSpec, beds named f"{ward.id}-{n:02d}" starting at 01, all FREE."""
-    raise NotImplementedError
+    """One Ward per WardSpec, beds named f"{ward.id}-{n:02d}" starting at 01, all FREE."""
+    return Hospital(
+        hospital_id=spec.id,
+        name=spec.name,
+        lat=spec.lat,
+        lon=spec.lon,
+        wards=[
+            Ward(
+                ward_id=ws.id,
+                department=ws.department,
+                beds=[Bed(bed_id=f"{ws.id}-{n:02d}") for n in range(1, ws.beds + 1)],
+            )
+            for ws in spec.wards
+        ],
+    )
 
 
 def build_ambulance(spec: AmbulanceSpec, default_speed_kmh: float) -> Ambulance:
-    """TODO: parked at (base_lat, base_lon), speed from spec or default."""
-    raise NotImplementedError
+    """Parked at (base_lat, base_lon), AVAILABLE, speed from spec or the scenario default."""
+    return Ambulance(
+        vehicle_id=spec.id,
+        base_lat=spec.base_lat,
+        base_lon=spec.base_lon,
+        lat=spec.base_lat,
+        lon=spec.base_lon,
+        speed_kmh=spec.speed_kmh if spec.speed_kmh is not None else default_speed_kmh,
+    )
