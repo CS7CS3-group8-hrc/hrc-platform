@@ -1,0 +1,91 @@
+# Run the Python agent + AI skeletons + Kafka:  docker compose -f docker-compose.agents.yml up -d --build
+# vLLM runs on the Mac itself (vllm-metal):  vllm serve mlx-community/Qwen2.5-0.5B-Instruct-4bit --host 0.0.0.0 --port 8010 --api-key local
+x-kafka-client: &kafka-client
+  environment:
+    KAFKA_BOOTSTRAP: kafka:9092
+  depends_on:
+    kafka-init:
+      condition: service_completed_successfully
+
+services:
+  # ---------------- Kafka (single node, KRaft mode: no ZooKeeper) ----------------
+  # Two listeners: containers use kafka:9092, tools on your Mac use localhost:9094.
+  kafka:
+    image: apache/kafka:3.9.0
+    ports: ["9094:9094"]
+    environment:
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:9094,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes: ["kafka-data:/var/lib/kafka/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  # One-shot job: creates the topics, then exits.
+  kafka-init:
+    image: apache/kafka:3.9.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        for t in hrc.hello.requests hrc.hello.replies; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --topic $$t --partitions 1 --replication-factor 1
+        done
+
+  # Browse topics and messages at http://localhost:8090
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports: ["8090:8080"]
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # ---------------- Agents and AI services ----------------
+  allocation-coordinator:
+    build: services/allocation-coordinator
+    ports: ["8101:8080"]
+    <<: *kafka-client
+  patient-transfer-agent:
+    build: services/patient-transfer-agent
+    ports: ["8102:8080"]
+    <<: *kafka-client
+  emergency-coordination-agent:
+    build: services/emergency-coordination-agent
+    ports: ["8103:8080"]
+  ambulance-coordination-agent:
+    build: services/ambulance-coordination-agent
+    ports: ["8104:8080"]
+    <<: *kafka-client
+  rag-service:
+    build: services/rag-service
+    ports: ["8105:8080"]
+  explanation-service:
+    build: services/explanation-service
+    ports: ["8106:8080"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+  forecasting-service:
+    build: services/forecasting-service
+    ports: ["8107:8080"]
+
+volumes:
+  kafka-data:
