@@ -14,5 +14,13 @@ prometheus:
 
 grafana:
   resources:
-    requests: {cpu: 50m, memory: 128Mi}
-    limits: {memory: 384Mi}
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+  readinessProbe:
+    timeoutSeconds: 10
+    periodSeconds: 10
+    failureThreshold: 6
+  livenessProbe:
+    timeoutSeconds: 10
+    periodSeconds: 15
+    failureThreshold: 10
