@@ -1,0 +1,311 @@
+# TEST-ONLY: the 7 Python services. Images are built into minikube by run.sh (hrc/<name>:dev).
+#
+# THE MONITORING CONTRACT: every pod below has
+#   - the pod label    monitoring: hrc
+#   - a container port named  metrics  (the /metrics page)
+# Any deployment with those two things can be picked up by the monitoring stack.
+#
+# NOTE: no HTTP health probes on port 8080 on purpose: these services treat ANY request there as a
+# message (e.g. a GET makes the ambulance agent publish to Kafka), so probes just check the port is open.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: allocation-coordinator
+  namespace: hrc
+  labels: {app: allocation-coordinator}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: allocation-coordinator}
+  template:
+    metadata:
+      labels:
+        app: allocation-coordinator
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: allocation-coordinator
+          image: hrc/allocation-coordinator:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          env:
+            - {name: KAFKA_BOOTSTRAP, value: "kafka:9092"}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: allocation-coordinator
+  namespace: hrc
+spec:
+  selector: {app: allocation-coordinator}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: patient-transfer-agent
+  namespace: hrc
+  labels: {app: patient-transfer-agent}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: patient-transfer-agent}
+  template:
+    metadata:
+      labels:
+        app: patient-transfer-agent
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: patient-transfer-agent
+          image: hrc/patient-transfer-agent:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          env:
+            - {name: KAFKA_BOOTSTRAP, value: "kafka:9092"}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-transfer-agent
+  namespace: hrc
+spec:
+  selector: {app: patient-transfer-agent}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ambulance-coordination-agent
+  namespace: hrc
+  labels: {app: ambulance-coordination-agent}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: ambulance-coordination-agent}
+  template:
+    metadata:
+      labels:
+        app: ambulance-coordination-agent
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: ambulance-coordination-agent
+          image: hrc/ambulance-coordination-agent:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          env:
+            - {name: KAFKA_BOOTSTRAP, value: "kafka:9092"}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ambulance-coordination-agent
+  namespace: hrc
+spec:
+  selector: {app: ambulance-coordination-agent}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: emergency-coordination-agent
+  namespace: hrc
+  labels: {app: emergency-coordination-agent}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: emergency-coordination-agent}
+  template:
+    metadata:
+      labels:
+        app: emergency-coordination-agent
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: emergency-coordination-agent
+          image: hrc/emergency-coordination-agent:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: emergency-coordination-agent
+  namespace: hrc
+spec:
+  selector: {app: emergency-coordination-agent}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-service
+  namespace: hrc
+  labels: {app: rag-service}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: rag-service}
+  template:
+    metadata:
+      labels:
+        app: rag-service
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: rag-service
+          image: hrc/rag-service:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-service
+  namespace: hrc
+spec:
+  selector: {app: rag-service}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: explanation-service
+  namespace: hrc
+  labels: {app: explanation-service}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: explanation-service}
+  template:
+    metadata:
+      labels:
+        app: explanation-service
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: explanation-service
+          image: hrc/explanation-service:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          env:
+            - {name: VLLM_URL, value: "http://host.minikube.internal:8010/v1"}   # vLLM running on your Mac
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: explanation-service
+  namespace: hrc
+spec:
+  selector: {app: explanation-service}
+  ports:
+    - {name: http, port: 8080, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: forecasting-service
+  namespace: hrc
+  labels: {app: forecasting-service}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: forecasting-service}
+  template:
+    metadata:
+      labels:
+        app: forecasting-service
+        monitoring: hrc
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: forecasting-service
+          image: hrc/forecasting-service:dev
+          imagePullPolicy: Never      # image was built straight into minikube
+          ports:
+            - {name: http, containerPort: 8080}
+            - {name: metrics, containerPort: 9100}
+          readinessProbe:
+            tcpSocket: {port: 8080}
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 20m, memory: 48Mi}
+            limits: {memory: 256Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: forecasting-service
+  namespace: hrc
+spec:
+  selector: {app: forecasting-service}
+  ports:
+    - {name: http, port: 8080, targetPort: http}

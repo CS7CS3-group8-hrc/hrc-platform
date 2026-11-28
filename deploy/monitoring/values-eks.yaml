@@ -1,0 +1,15 @@
+# PLACEHOLDER for the EKS cluster. Fill in once the cluster exists. Things to decide with the infra team:
+#
+# prometheus:
+#   prometheusSpec:
+#     storageSpec:                        # keep metrics across restarts
+#       volumeClaimTemplate:
+#         spec:
+#           storageClassName: gp3         # whatever the cluster's EBS storage class is called
+#           resources: {requests: {storage: 20Gi}}
+# grafana:
+#   persistence: {enabled: true, storageClassName: gp3, size: 5Gi}
+#   ingress: ...                          # how Grafana is exposed (or keep using port-forward)
+#
+# nodeExporter stays enabled here (it works on real nodes).
+{}

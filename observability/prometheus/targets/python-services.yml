@@ -1,0 +1,15 @@
+# Python services: each exposes /metrics on port 9100 (see services/*/metrics.py)
+- targets: ["allocation-coordinator:9100"]
+  labels: {service: allocation-coordinator, kind: python-service}
+- targets: ["patient-transfer-agent:9100"]
+  labels: {service: patient-transfer-agent, kind: python-service}
+- targets: ["emergency-coordination-agent:9100"]
+  labels: {service: emergency-coordination-agent, kind: python-service}
+- targets: ["ambulance-coordination-agent:9100"]
+  labels: {service: ambulance-coordination-agent, kind: python-service}
+- targets: ["rag-service:9100"]
+  labels: {service: rag-service, kind: python-service}
+- targets: ["explanation-service:9100"]
+  labels: {service: explanation-service, kind: python-service}
+- targets: ["forecasting-service:9100"]
+  labels: {service: forecasting-service, kind: python-service}

@@ -35,7 +35,7 @@ http://localhost:8090. From your Mac, the broker is `localhost:9094`; inside Doc
 
 ### Run it
 
-Needs only Docker. Ports 8101-8107, 8090 and 9094 must be free.
+Needs only Docker. Ports 8101-8107, 8090 and 9094 must be free (plus 3001 and 9090 for monitoring).
 
 ```bash
 docker compose -f docker-compose.agents.yml up -d --build
@@ -59,3 +59,16 @@ Without it everything still runs and the reply says `LLM not reachable`.
   ```
 - **Linux or Windows with an NVIDIA GPU:** run standard vLLM with any small model on port 8010.
 - To use a different server or model, set `VLLM_URL` and `VLLM_MODEL` on `explanation-service`.
+
+### Monitoring (Prometheus + Grafana)
+
+Every Python service exposes metrics on port 9100. Prometheus (http://localhost:9090) collects them and
+Grafana (http://localhost:3001) shows a dashboard. Setup, the demo script and how to add more services:
+see [observability/README.md](observability/README.md).
+For Kubernetes (minikube now, EKS later) see [deploy/README.md](deploy/README.md).
+
+```bash
+cp .env.example .env     # set GRAFANA_ADMIN_PASSWORD
+docker compose -f docker-compose.agents.yml -f docker-compose.observability.yml up -d --build
+./load.sh
+```

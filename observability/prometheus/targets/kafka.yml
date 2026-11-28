@@ -1,0 +1,3 @@
+# Kafka broker stats via kafka-exporter (see docker-compose.observability.yml)
+- targets: ["kafka-exporter:9308"]
+  labels: {service: kafka, kind: infrastructure}

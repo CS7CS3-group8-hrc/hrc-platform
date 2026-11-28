@@ -1,6 +1,8 @@
 import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import metrics
+
 SERVICE = "forecasting-service"
 
 # Very simple model: expected ED patients per hour = base rate x scenario multipliers.
@@ -44,8 +46,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def log_request(self, code="-", size="-"):
+        metrics.HTTP_REQUESTS.labels(SERVICE, str(code)).inc()
+        super().log_request(code, size)
+
     do_GET = do_POST
 
 
+metrics.start()
 print(f"{SERVICE} listening on port 8080", flush=True)
 HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()
