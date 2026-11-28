@@ -3,6 +3,8 @@ import os
 import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import metrics
+
 SERVICE = "explanation-service"
 VLLM_URL = os.getenv("VLLM_URL", "http://host.docker.internal:8010/v1")
 VLLM_MODEL = os.getenv("VLLM_MODEL", "mlx-community/Qwen2.5-0.5B-Instruct-4bit")
@@ -33,8 +35,13 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def log_request(self, code="-", size="-"):
+        metrics.HTTP_REQUESTS.labels(SERVICE, str(code)).inc()
+        super().log_request(code, size)
+
     do_GET = do_POST
 
 
+metrics.start()
 print(f"{SERVICE} listening on port 8080", flush=True)
 HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()

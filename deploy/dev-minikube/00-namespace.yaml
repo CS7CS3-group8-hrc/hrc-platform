@@ -1,0 +1,6 @@
+# TEST-ONLY manifests for trying the platform on minikube. The real EKS manifests are owned by the
+# platform/infra team; see deploy/README.md for the two things those need for monitoring to work.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hrc

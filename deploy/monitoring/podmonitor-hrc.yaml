@@ -1,0 +1,21 @@
+# Scrape every pod labelled "monitoring: hrc" on its container port named "metrics".
+# New services join monitoring just by following that label + port-name convention.
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: hrc-services
+  namespace: monitoring
+spec:
+  namespaceSelector:
+    any: true
+  selector:
+    matchLabels:
+      monitoring: hrc
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+      relabelings:
+        # name each series by its service, so the dashboard can say "service=allocation-coordinator"
+        - sourceLabels: [__meta_kubernetes_pod_label_app]
+          targetLabel: service

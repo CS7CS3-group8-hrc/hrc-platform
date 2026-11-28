@@ -1,0 +1,26 @@
+# minikube on a laptop: keep it light.
+
+# The node-exporter needs host mounts that Docker-based minikube does not allow, and it is not
+# needed for per-pod CPU / memory (that comes from the kubelet).
+nodeExporter:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    resources:
+      requests: {cpu: 100m, memory: 400Mi}
+      limits: {memory: 1Gi}
+    # No persistent volume: data is lost if the Prometheus pod restarts. Fine for testing.
+
+grafana:
+  resources:
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {memory: 1Gi}
+  readinessProbe:
+    timeoutSeconds: 10
+    periodSeconds: 10
+    failureThreshold: 6
+  livenessProbe:
+    timeoutSeconds: 10
+    periodSeconds: 15
+    failureThreshold: 10

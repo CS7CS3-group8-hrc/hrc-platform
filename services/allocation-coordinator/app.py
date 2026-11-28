@@ -4,6 +4,8 @@ import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
+import metrics
+
 from kafka_bus import REPLIES_TOPIC, REQUESTS_TOPIC, Bus
 
 AGENT = "allocation-coordinator"
@@ -50,9 +52,14 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def log_request(self, code="-", size="-"):
+        metrics.HTTP_REQUESTS.labels(AGENT, str(code)).inc()
+        super().log_request(code, size)
+
     do_GET = do_POST
 
 
 bus.subscribe([REQUESTS_TOPIC], on_kafka_message)
+metrics.start()
 print(f"{AGENT} listening on port 8080", flush=True)
 HTTPServer(("0.0.0.0", 8080), Handler).serve_forever()

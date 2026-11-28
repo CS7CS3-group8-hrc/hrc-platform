@@ -87,5 +87,10 @@ services:
     build: services/forecasting-service
     ports: ["8107:8080"]
 
+# Shared network so the monitoring stack (and later the hospital node) can reach these services by name.
+networks:
+  default:
+    name: hrc-net
+
 volumes:
   kafka-data:

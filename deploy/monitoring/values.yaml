@@ -1,0 +1,35 @@
+# Settings shared by every environment, for the kube-prometheus-stack Helm chart.
+# Per-environment differences live in values-minikube.yaml / values-eks.yaml.
+
+alertmanager:
+  enabled: false          # alerting is out of scope for the thin slice
+
+# Control-plane components are not reachable on EKS (AWS manages them) and listen on localhost on
+# minikube, so their targets would be permanently red. Switched off everywhere.
+kubeEtcd: {enabled: false}
+kubeControllerManager: {enabled: false}
+kubeScheduler: {enabled: false}
+kubeProxy: {enabled: false}
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    # Pick up PodMonitors / ServiceMonitors / rules from ANY namespace, not only ones labelled
+    # with this Helm release. This is what lets new services join monitoring on their own.
+    podMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+
+grafana:
+  # Password comes from a Kubernetes Secret created by install.sh (never committed to git).
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Any ConfigMap labelled grafana_dashboard=1 (in any namespace) becomes a dashboard.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      searchNamespace: ALL

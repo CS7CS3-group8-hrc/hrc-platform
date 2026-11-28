@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: hrc
+    folder: HRC
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

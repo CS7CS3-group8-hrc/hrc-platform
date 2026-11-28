@@ -5,10 +5,15 @@ import threading
 import time
 
 from confluent_kafka import Consumer, Producer
+from prometheus_client import Counter
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
 REQUESTS_TOPIC = "hrc.hello.requests"
 REPLIES_TOPIC = "hrc.hello.replies"
+
+PRODUCED = Counter("hrc_kafka_messages_produced_total", "Messages published to Kafka", ["service", "topic"])
+CONSUMED = Counter("hrc_kafka_messages_consumed_total", "Messages read from Kafka", ["service", "topic"])
+HANDLER_ERRORS = Counter("hrc_kafka_handler_errors_total", "Messages whose handler raised an error", ["service", "topic"])
 
 
 class Bus:
@@ -21,6 +26,7 @@ class Bus:
         self.producer.produce(topic, key=key, value=json.dumps(message).encode())
         if self.producer.flush(10) > 0:
             raise RuntimeError(f"could not deliver message to {topic} (is Kafka up?)")
+        PRODUCED.labels(self.service, topic).inc()
         print(f"[{self.service}] produced to {topic}: {message}", flush=True)
 
     def subscribe(self, topics, handler):
@@ -44,7 +50,9 @@ class Bus:
                 print(f"[{self.service}] kafka error: {msg.error()}", flush=True)
                 time.sleep(1)
                 continue
+            CONSUMED.labels(self.service, msg.topic()).inc()
             try:
                 handler(msg.topic(), json.loads(msg.value()))
             except Exception as exc:            # a bad message must not kill the consumer
+                HANDLER_ERRORS.labels(self.service, msg.topic()).inc()
                 print(f"[{self.service}] handler error: {exc}", flush=True)
